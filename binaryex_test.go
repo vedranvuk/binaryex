@@ -73,21 +73,23 @@ func (tt *TestType) Init() {
 
 func TestReadWrite(t *testing.T) {
 
-	in := &TestType{}
-	in.Init()
+	for i := 0; i < 100; i++ {
+		in := &TestType{}
+		in.Init()
 
-	buf := bytes.NewBuffer(nil)
-	if err := Write(buf, in); err != nil {
-		t.Fatalf("write failed: %v", err)
-	}
-	fmt.Printf("Buffer: %d\n", buf.Bytes())
+		buf := bytes.NewBuffer(nil)
+		if err := Write(buf, in); err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+		// fmt.Printf("Buffer: %d\n", buf.Bytes())
 
-	out := &TestType{}
-	if err := Read(buf, out); err != nil {
-		fmt.Printf("In: %v\n", out)
-		t.Fatalf("read failed: %v", err)
+		out := &TestType{}
+		if err := Read(buf, out); err != nil {
+			fmt.Printf("In: %v\n", out)
+			t.Fatalf("read failed: %v", err)
+		}
+		// fmt.Printf("IN:\n%v\nOUT:\n%v\n", out, in)
 	}
-	fmt.Printf("IN:\n%v\nOUT:\n%v\n", out, in)
 }
 
 func TestNumber(t *testing.T) {
@@ -117,5 +119,27 @@ func TestString(t *testing.T) {
 	}
 	if in != out {
 		t.Fatalf("Read/Write number missmatch: in: %s, out: %s\n", in, out)
+	}
+}
+
+func TestMap(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		buf := bytes.NewBuffer(nil)
+		out := make(map[string]int)
+		out["a"] = 1
+		out["b"] = 2
+		out["c"] = 3
+		if err := WriteMap(buf, out); err != nil {
+			t.Fatal("WriteString Failed", err)
+		}
+		in := make(map[string]int)
+		if err := ReadMap(buf, &in); err != nil {
+			t.Fatal("ReadString failed", err)
+		}
+		for k, v := range in {
+			if out[k] != v {
+				t.Fatalf("mismatch")
+			}
+		}
 	}
 }

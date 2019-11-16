@@ -58,8 +58,9 @@ func wrapReader(r io.Reader) *readByteWrapper {
 	return &readByteWrapper{r}
 }
 
-// WriteReflect writes a reflect value v to writer w or returns an error if one
-// occured.
+// WriteReflect writes a reflect value v to writer w or returns an error
+// if one occured.
+// ! Not to be called from within a BinaryMarshaler implementor.
 func WriteReflect(w io.Writer, v reflect.Value) (err error) {
 
 	if bm, ok := v.Interface().(encoding.BinaryMarshaler); ok {
@@ -94,6 +95,7 @@ func WriteReflect(w io.Writer, v reflect.Value) (err error) {
 }
 
 // Write writes value val to writer w or returns an error if one occured.
+// ! Not to be called from within a BinaryMarshaler implementor.
 func Write(w io.Writer, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return WriteReflect(w, v)
@@ -101,6 +103,7 @@ func Write(w io.Writer, val interface{}) error {
 
 // ReadReflect reads a value from reader r and puts it into v or returns an
 // error if one occured.
+// ! Not to be called from within a BinaryUnmarshaler implementor.
 func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 
 	if !v.CanAddr() {
@@ -134,8 +137,9 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 	return
 }
 
-// Read reads a value from r and puts it into val or returns an error if one
-// occured.
+// Read reads a value from r and puts it into val or returns an error
+// if one occured.
+// ! Not to be called from within a BinaryUnmarshaler implementor.
 func Read(r io.Reader, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return ReadReflect(r, v)
@@ -387,6 +391,9 @@ func ReadSliceReflect(r io.Reader, v reflect.Value) (err error) {
 	l := 0
 	if err = ReadNumber(r, &l); err != nil {
 		return
+	}
+	if l < 0 {
+		return errors.New("invalid map length")
 	}
 	v.Set(reflect.MakeSlice(v.Type(), l, l))
 	for i := 0; i < l; i++ {
