@@ -6,7 +6,7 @@ package binaryex
 
 import (
 	"bytes"
-	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -14,10 +14,10 @@ import (
 type DerivedType uint64
 
 type StructType struct {
-	TestField DerivedType
+	TimeField time.Time
 }
 
-type TestType struct {
+type BaseTypes struct {
 	BoolField       bool
 	IntField        int
 	UintField       uint
@@ -37,11 +37,9 @@ type TestType struct {
 	ArrayField      [5]byte
 	SliceField      []string
 	MapField        map[string]int
-	StructField     StructType
-	TimeField       time.Time
 }
 
-func (tt *TestType) Init() {
+func (tt *BaseTypes) init() {
 	tt.BoolField = true
 	tt.IntField = -1
 	tt.UintField = 1
@@ -65,30 +63,79 @@ func (tt *TestType) Init() {
 		"two":   2,
 		"three": 3,
 	}
-	tt.StructField = StructType{
-		TestField: 1337,
-	}
-	tt.TimeField = time.Now()
 }
 
-func TestReadWrite(t *testing.T) {
+type MarshalableTypes struct {
+	TimeField time.Time
+}
 
-	for i := 0; i < 100; i++ {
-		in := &TestType{}
-		in.Init()
+func (mt *MarshalableTypes) init() {
+	mt.TimeField = time.Now()
+}
 
-		buf := bytes.NewBuffer(nil)
-		if err := Write(buf, in); err != nil {
-			t.Fatalf("write failed: %v", err)
+type AllTypes struct {
+	BaseTypes
+	MarshalableTypes
+}
+
+func (at *AllTypes) init() {
+	at.BaseTypes.init()
+	at.MarshalableTypes.init()
+}
+
+func TestReadWriteBase(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := BaseTypes{}
+	out.init()
+	if err := Write(buf, out); err != nil {
+		t.Fatal("WriteStruct failed", err)
+	}
+	in := BaseTypes{}
+	if err := Read(buf, &in); err != nil {
+		t.Fatal("ReadStruct failed", err)
+	}
+
+	if !reflect.DeepEqual(in, out) {
+		t.Fatalf("Read/Write missmatch: in\n%v, out:\n%v\n", in, out)
+	}
+}
+
+func TestBool(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := make(map[int]bool)
+	out[0] = true
+	out[1] = true
+	out[2] = false
+	if err := WriteBool(buf, out[0]); err != nil {
+		t.Fatal("WriteBool failed")
+	}
+	if err := WriteBool(buf, out[1]); err != nil {
+		t.Fatal("WriteBool failed")
+	}
+	if err := WriteBool(buf, out[2]); err != nil {
+		t.Fatal("WriteBool failed")
+	}
+	in := make(map[int]bool)
+	in[0] = false
+	in[1] = false
+	in[2] = true
+	temp := false
+	if err := ReadBool(buf, &temp); err != nil {
+		t.Fatal("ReadBool failed", err)
+	}
+	in[0] = temp
+	if err := ReadBool(buf, &temp); err != nil {
+		t.Fatal("ReadBool failed", err)
+	}
+	in[1] = temp
+	if err := ReadBool(buf, &temp); err != nil {
+		t.Fatal("ReadBool failed", err)
+	}
+	in[2] = temp
+	for k, v := range out {
+		if in[k] != v {
+			t.Fatalf("Read/Write bool missmatch: in %v, out: %v\n", v, in[k])
 		}
-		// fmt.Printf("Buffer: %d\n", buf.Bytes())
-
-		out := &TestType{}
-		if err := Read(buf, out); err != nil {
-			fmt.Printf("In: %v\n", out)
-			t.Fatalf("read failed: %v", err)
-		}
-		// fmt.Printf("IN:\n%v\nOUT:\n%v\n", out, in)
 	}
 }
 
@@ -122,24 +169,99 @@ func TestString(t *testing.T) {
 	}
 }
 
+func TestArray(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := [5]byte{0x1, 0x2, 0x3, 0x4, 0x5}
+	if err := WriteArray(buf, out); err != nil {
+		t.Fatal("WriteArray failed", err)
+	}
+	in := [5]byte{}
+	if err := ReadArray(buf, &in); err != nil {
+		t.Fatal("ReadArray failed", err)
+	}
+	if bytes.Compare(in[:], out[:]) != 0 {
+		t.Fatalf("Read/Write array missmatch: in %v, out: %v\n", in, out)
+	}
+}
+
+func TestSlice(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := []byte{0x1, 0x2, 0x3, 0x4, 0x5}
+	if err := WriteSlice(buf, out); err != nil {
+		t.Fatal("WriteArray failed", err)
+	}
+	in := []byte{}
+	if err := ReadSlice(buf, &in); err != nil {
+		t.Fatal("ReadArray failed", err)
+	}
+	if bytes.Compare(in, out) != 0 {
+		t.Fatalf("Read/Write slice missmatch: in %v, out: %v\n", in, out)
+	}
+}
+
 func TestMap(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		buf := bytes.NewBuffer(nil)
-		out := make(map[string]int)
-		out["a"] = 1
-		out["b"] = 2
-		out["c"] = 3
-		if err := WriteMap(buf, out); err != nil {
-			t.Fatal("WriteString Failed", err)
+	buf := bytes.NewBuffer(nil)
+	out := make(map[string]int)
+	out["a"] = 1
+	out["b"] = 2
+	out["c"] = 3
+	if err := WriteMap(buf, out); err != nil {
+		t.Fatal("WriteString Failed", err)
+	}
+	in := make(map[string]int)
+	if err := ReadMap(buf, &in); err != nil {
+		t.Fatal("ReadString failed", err)
+	}
+	for k, v := range in {
+		if out[k] != v {
+			t.Fatalf("Read Write slice missmatch: in %v, out: %v\n", in, out)
 		}
-		in := make(map[string]int)
-		if err := ReadMap(buf, &in); err != nil {
-			t.Fatal("ReadString failed", err)
+	}
+}
+
+func TestStructBase(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := BaseTypes{}
+	out.init()
+	if err := WriteStruct(buf, out); err != nil {
+		t.Fatal("WriteStruct failed", err)
+	}
+	in := BaseTypes{}
+	if err := ReadStruct(buf, &in); err != nil {
+		t.Fatal("ReadStruct failed", err)
+	}
+
+	if !reflect.DeepEqual(BaseTypes(in), BaseTypes(out)) {
+		t.Fatalf("Read/Write struct missmatch: in\n%v, out:\n%v\n", in, out)
+	}
+}
+
+func BenchmarkReadWriteBase(b *testing.B) {
+	buf := bytes.NewBuffer(nil)
+	val := BaseTypes{}
+	for i := 0; i < b.N; i++ {
+		val.init()
+		if err := Write(buf, val); err != nil {
+			b.Fatal(err)
 		}
-		for k, v := range in {
-			if out[k] != v {
-				t.Fatalf("mismatch")
-			}
+		if err := Read(buf, &val); err != nil {
+			b.Fatal(err)
 		}
+		buf.Truncate(0)
+	}
+}
+
+func BenchmarkReadWriteAll(b *testing.B) {
+	buf := bytes.NewBuffer(nil)
+	val := AllTypes{}
+	for i := 0; i < b.N; i++ {
+		val.init()
+		if err := Write(buf, val); err != nil {
+			b.Fatal(err)
+		}
+		if err := Read(buf, &val); err != nil {
+			b.Fatal(err)
+		}
+		buf.Truncate(0)
 	}
 }

@@ -10,7 +10,10 @@
 // values or pointers to values and Read functions take pointers to output
 // values only. Pointer type fields in structures are marshalable but not
 // unmarshalable. If an unsupported field is found in a struct functions will
-// error. Struct field tags are not read. Functions may panic.
+// error. Struct field tags are not read.
+//
+// All functions can panic if they encounter invalid parameters as most checks
+// are ommited for performance reasons.
 //
 // If a value supports encoding.BinaryMarshaler it is preferred. Watch out for
 // loops.
@@ -23,39 +26,52 @@ package binaryex
 import (
 	"encoding"
 	"encoding/binary"
-	"errors"
 	"io"
 	"reflect"
+	"strings"
 )
+
+// BinaryExError is the base error type of binaryex package.
+type BinaryExError struct {
+	msg string
+}
+
+// Error satisfies the Error interface.
+func (bxe BinaryExError) Error() string {
+	return "binaryex: " + bxe.msg
+}
 
 var (
 	// ErrUnsupportedValue is returned when an unsupported value is encountered.
-	ErrUnsupportedValue = errors.New("unsupported value")
+	ErrUnsupportedValue = BinaryExError{"unsupported value"}
 
 	// ErrUnadressableValue is returned when a non-pointer value is encountered.
-	ErrUnadressableValue = errors.New("unadressable value")
+	ErrUnadressableValue = BinaryExError{"unadressable value"}
+
+	// ErrUnexpected is returned when a invalid boolean, length of a string, array,
+	// slice or map is read.
+	ErrUnexpected = BinaryExError{"unexpected value"}
 )
 
 // readByteWrapper wraps an io.Reader and implements a ReadByte method.
 // This is needed for string, slice and array length prefixes stored as VarInts.
-// Slows down number reads a lot, especially if reading directly from disks.
 type readByteWrapper struct {
 	io.Reader
+	p [1]byte
 }
 
 // ReadByte implements the ReadByte method.
 func (rbw *readByteWrapper) ReadByte() (b byte, err error) {
 
-	var p [1]byte
-	if _, err = rbw.Read(p[:]); err != nil {
+	if _, err = rbw.Read(rbw.p[:]); err != nil {
 		return
 	}
-	return p[0], nil
+	return rbw.p[0], nil
 }
 
 // wrapReader wraps an io.Reader in a io.ByteReader implementor.
 func wrapReader(r io.Reader) *readByteWrapper {
-	return &readByteWrapper{r}
+	return &readByteWrapper{r, [1]byte{0}}
 }
 
 // WriteReflect writes a reflect value v to writer w or returns an error
@@ -176,13 +192,15 @@ func ReadBoolReflect(r io.Reader, v reflect.Value) (err error) {
 		return
 	}
 
-	if p[0] > 0 {
-		v.SetBool(true)
-	} else {
+	if p[0] == 0 {
 		v.SetBool(false)
+		return
 	}
-
-	return
+	if p[0] == 1 {
+		v.SetBool(true)
+		return
+	}
+	return ErrUnexpected
 }
 
 // ReadBool reads a bool value from r and puts it into val or returns an error
@@ -301,7 +319,9 @@ func ReadStringReflect(r io.Reader, v reflect.Value) (err error) {
 	if err = ReadNumber(r, &l); err != nil {
 		return err
 	}
-
+	if l < 0 {
+		return ErrUnexpected
+	}
 	buf := make([]byte, l)
 	_, err = r.Read(buf)
 	if err != nil {
@@ -393,7 +413,7 @@ func ReadSliceReflect(r io.Reader, v reflect.Value) (err error) {
 		return
 	}
 	if l < 0 {
-		return errors.New("invalid map length")
+		return ErrUnexpected
 	}
 	v.Set(reflect.MakeSlice(v.Type(), l, l))
 	for i := 0; i < l; i++ {
@@ -448,6 +468,9 @@ func ReadMapReflect(r io.Reader, v reflect.Value) (err error) {
 	if err = ReadNumber(r, &l); err != nil {
 		return
 	}
+	if l < 0 {
+		return ErrUnexpected
+	}
 	kt := v.Type().Key()
 	vt := v.Type().Elem()
 	v.Set(reflect.MakeMap(v.Type()))
@@ -476,10 +499,11 @@ func ReadMap(r io.Reader, val interface{}) error {
 // error if one occured.
 func WriteStructReflect(w io.Writer, v reflect.Value) (err error) {
 	for i := 0; i < v.NumField(); i++ {
-		if v.Type().Field(i).Name == "_" {
+		fname := v.Type().Field(i).Name
+		if fname == "_" {
 			continue
 		}
-		if !v.Field(i).CanSet() {
+		if fname[0] == strings.ToLower(fname)[0] {
 			continue
 		}
 		if err = WriteReflect(w, v.Field(i)); err != nil {
