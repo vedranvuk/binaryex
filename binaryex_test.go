@@ -73,6 +73,32 @@ func (mt *MarshalableTypes) init() {
 	mt.TimeField = time.Now()
 }
 
+type PointerTypes struct {
+	PBoolField   *bool
+	PStringField *string
+	PStructField *BaseTypes
+}
+
+func (pt *PointerTypes) init() {
+	bv := true
+	pt.PBoolField = &bv
+	sv := "teststring"
+	pt.PStringField = &sv
+	pt.PStructField = &BaseTypes{}
+	pt.PStructField.init()
+}
+
+type DeepPointerTypes struct {
+	PPointerField ***bool
+}
+
+func (dpt *DeepPointerTypes) init() {
+	pv0 := true
+	pv1 := &pv0
+	pv2 := &pv1
+	dpt.PPointerField = &pv2
+}
+
 type AllTypes struct {
 	BaseTypes
 	MarshalableTypes
@@ -233,6 +259,40 @@ func TestStructBase(t *testing.T) {
 
 	if !reflect.DeepEqual(BaseTypes(in), BaseTypes(out)) {
 		t.Fatalf("Read/Write struct missmatch: in\n%v, out:\n%v\n", in, out)
+	}
+}
+
+func TestStructPointer(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := PointerTypes{}
+	out.init()
+	if err := WriteStruct(buf, out); err != nil {
+		t.Fatal("WriteStruct pointer failed", err)
+	}
+	in := PointerTypes{}
+	if err := ReadStruct(buf, &in); err != nil {
+		t.Fatal("ReadStruct pointer failed", err)
+	}
+
+	if !reflect.DeepEqual(PointerTypes(in), PointerTypes(out)) {
+		t.Fatalf("Read/Write struct pointer missmatch: in\n%v, out:\n%v\n", in, out)
+	}
+}
+
+func TestStructDeepPointer(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := DeepPointerTypes{}
+	out.init()
+	if err := WriteStruct(buf, out); err != nil {
+		t.Fatal("WriteStruct deep pointer failed", err)
+	}
+	in := DeepPointerTypes{}
+	if err := ReadStruct(buf, &in); err != nil {
+		t.Fatal("ReadStruct deep pointer failed", err)
+	}
+
+	if !reflect.DeepEqual(DeepPointerTypes(in), DeepPointerTypes(out)) {
+		t.Fatalf("Read/Write struct deep pointer missmatch: in\n%v, out:\n%v\n", in, out)
 	}
 }
 

@@ -87,8 +87,11 @@ func WriteReflect(w io.Writer, v reflect.Value) (err error) {
 		return Write(w, p)
 	}
 
-	if v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Ptr {
 		v = v.Elem()
+	}
+	if !v.IsValid() {
+		return
 	}
 
 	switch v.Type().Kind() {
@@ -126,29 +129,63 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 		return ErrUnadressableValue
 	}
 
-	if bu, ok := v.Addr().Interface().(encoding.BinaryUnmarshaler); ok {
-		b := []byte{}
-		if err = ReadSlice(r, &b); err != nil {
-			return
-		}
-		return bu.UnmarshalBinary(b)
+	// Alloc a new value.
+	ptr := false
+	var pv = reflect.Value{}
+	if v.Kind() == reflect.Ptr {
+		pv = reflect.New(v.Type().Elem())
+		ptr = true
+	} else {
+		pv = reflect.New(v.Type())
 	}
-
-	switch v.Kind() {
+	nv := reflect.Indirect(pv)
+	if nv.Kind() == reflect.Ptr {
+		if err := ReadReflect(r, nv); err != nil {
+			return err
+		}
+		// Set value.
+		if ptr {
+			v.Set(pv)
+		} else {
+			v.Set(nv)
+		}
+		return
+	}
+	// Check if caller supports BinaryMarshaler.
+	if nv.IsValid() {
+		if bu, ok := nv.Interface().(encoding.BinaryUnmarshaler); ok {
+			b := []byte{}
+			if err = ReadSlice(r, &b); err != nil {
+				return
+			}
+			return bu.UnmarshalBinary(b)
+		}
+	}
+	// Unmarshal to temp value.
+	switch pv.Elem().Type().Kind() {
 	case reflect.Bool:
-		err = ReadBoolReflect(r, v)
+		err = ReadBoolReflect(r, nv)
 	case reflect.String:
-		err = ReadStringReflect(r, v)
+		err = ReadStringReflect(r, nv)
 	case reflect.Array:
-		err = ReadArrayReflect(r, v)
+		err = ReadArrayReflect(r, nv)
 	case reflect.Slice:
-		err = ReadSliceReflect(r, v)
+		err = ReadSliceReflect(r, nv)
 	case reflect.Map:
-		err = ReadMapReflect(r, v)
+		err = ReadMapReflect(r, nv)
 	case reflect.Struct:
-		err = ReadStructReflect(r, v)
+		err = ReadStructReflect(r, nv)
 	default:
-		err = ReadNumberReflect(r, v)
+		err = ReadNumberReflect(r, nv)
+	}
+	if err != nil {
+		return err
+	}
+	// Set value.
+	if ptr {
+		v.Set(pv)
+	} else {
+		v.Set(nv)
 	}
 	return
 }
@@ -529,7 +566,11 @@ func ReadStructReflect(r io.Reader, v reflect.Value) (err error) {
 	}
 
 	for i := 0; i < v.NumField(); i++ {
-		if v.Type().Field(i).Name == "_" {
+		fname := v.Type().Field(i).Name
+		if fname == "_" {
+			continue
+		}
+		if fname[0] == strings.ToLower(fname)[0] {
 			continue
 		}
 		if !v.Field(i).CanSet() {
