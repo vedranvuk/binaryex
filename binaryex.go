@@ -5,22 +5,32 @@
 // Package binaryex implements functions supplement to binary/encoding package.
 // It is designed for ease of use before speed.
 //
-// It supports binary marshaling of all built-in go types including derived
-// types, excluding chans, funcs, interfaces and pointers. Write functions take
-// values or pointers to values and Read functions take pointers to output
-// values only. Pointer type fields in structures are marshalable but not
-// unmarshalable. If an unsupported field is found in a struct functions will
-// error. Struct field tags are not read.
+// It supports binary marshaling of all go types, excluding funcs.
+//
+// Ints and Uints of any size are encoded as VarInts, floats and complex
+// numbers using binary encoding in LittleEndian order, and strings, arrays,
+// slices and maps are prefixed by a number (varint) specifying number of
+// their elements then written as a LittleEndian byte stream.
+//
+// Write functions take values or pointers to values. If a Pointer value was
+// passed to a Write function it is dereferenced up to the value itself then
+// written.
+//
+// Read functions take pointers to output values only as they have to be
+// mutable. If the dereferenced output value is a pointer itself, a new
+// value is allocated for it.
+//
+// If a pointer with a a nil value was Written, when Read, the pointer will
+// have its' value allocated (not nil) and value set to zero of that type.
 //
 // All functions can panic if they encounter invalid parameters as most checks
 // are ommited for performance reasons.
 //
-// If a value supports encoding.BinaryMarshaler it is preferred. Watch out for
-// loops.
+// If a value supports encoding.Binary(un)Marshaler it is preferred. Watch out
+// for infinite loops if calling Read, ReadReflect, Write or WriteReflect from
+// a BinaryMarshaler or BinaryUnmarshaler implementor.
 //
-// Ints and Uints are encoded as VarInts, floats and complex numbers using
-// binary encoding in LittleEndian order, and strings, slices and maps are
-// prefixed by a number (varint) specifying their lengths.
+// If an unsupported value is encountered functions will error.
 package binaryex
 
 import (
@@ -45,11 +55,10 @@ var (
 	// ErrUnsupportedValue is returned when an unsupported value is encountered.
 	ErrUnsupportedValue = BinaryExError{"unsupported value"}
 
-	// ErrUnadressableValue is returned when a non-pointer value is encountered.
+	// ErrUnadressableValue is returned when a non-pointer value is passed to a Read* function.
 	ErrUnadressableValue = BinaryExError{"unadressable value"}
 
-	// ErrUnexpected is returned when a invalid boolean, length of a string, array,
-	// slice or map is read.
+	// ErrUnexpected is returned when an unexpected value is read.
 	ErrUnexpected = BinaryExError{"unexpected value"}
 )
 
@@ -76,9 +85,16 @@ func wrapReader(r io.Reader) *readByteWrapper {
 
 // WriteReflect writes a reflect value v to writer w or returns an error
 // if one occured.
-// ! Not to be called from within a BinaryMarshaler implementor.
 func WriteReflect(w io.Writer, v reflect.Value) (err error) {
-
+	// Dereference pointers down to value.
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	// Write 0 for nil values.
+	if !v.IsValid() {
+		return WriteNumber(w, 0)
+	}
+	// Try BinaryMarshaler.
 	if bm, ok := v.Interface().(encoding.BinaryMarshaler); ok {
 		p, e := bm.MarshalBinary()
 		if e != nil {
@@ -86,15 +102,8 @@ func WriteReflect(w io.Writer, v reflect.Value) (err error) {
 		}
 		return Write(w, p)
 	}
-
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if !v.IsValid() {
-		return
-	}
-
-	switch v.Type().Kind() {
+	// Write value.
+	switch v.Kind() {
 	case reflect.Bool:
 		err = WriteBoolReflect(w, v)
 	case reflect.String:
@@ -114,7 +123,6 @@ func WriteReflect(w io.Writer, v reflect.Value) (err error) {
 }
 
 // Write writes value val to writer w or returns an error if one occured.
-// ! Not to be called from within a BinaryMarshaler implementor.
 func Write(w io.Writer, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return WriteReflect(w, v)
@@ -122,14 +130,13 @@ func Write(w io.Writer, val interface{}) error {
 
 // ReadReflect reads a value from reader r and puts it into v or returns an
 // error if one occured.
-// ! Not to be called from within a BinaryUnmarshaler implementor.
 func ReadReflect(r io.Reader, v reflect.Value) (err error) {
-
+	// Must be addressable.
 	if !v.CanAddr() {
 		return ErrUnadressableValue
 	}
-
-	// Alloc a new value.
+	// Alloc a new concrete value,
+	// or a pointer to value if v is a pointer.
 	ptr := false
 	var pv = reflect.Value{}
 	if v.Kind() == reflect.Ptr {
@@ -139,6 +146,7 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 		pv = reflect.New(v.Type())
 	}
 	nv := reflect.Indirect(pv)
+	// If a pointer, read the pointer.
 	if nv.Kind() == reflect.Ptr {
 		if err := ReadReflect(r, nv); err != nil {
 			return err
@@ -151,7 +159,7 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 		}
 		return
 	}
-	// Check if caller supports BinaryMarshaler.
+	// Try BinaryMarshaler.
 	if nv.IsValid() {
 		if bu, ok := nv.Interface().(encoding.BinaryUnmarshaler); ok {
 			b := []byte{}
@@ -161,7 +169,7 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 			return bu.UnmarshalBinary(b)
 		}
 	}
-	// Unmarshal to temp value.
+	// Read value to temp.
 	switch pv.Elem().Type().Kind() {
 	case reflect.Bool:
 		err = ReadBoolReflect(r, nv)
@@ -192,7 +200,6 @@ func ReadReflect(r io.Reader, v reflect.Value) (err error) {
 
 // Read reads a value from r and puts it into val or returns an error
 // if one occured.
-// ! Not to be called from within a BinaryUnmarshaler implementor.
 func Read(r io.Reader, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return ReadReflect(r, v)
@@ -251,7 +258,7 @@ func ReadBool(r io.Reader, b interface{}) error {
 // error if one occured.
 func WriteNumberReflect(w io.Writer, v reflect.Value) (err error) {
 
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		buf := make([]byte, binary.MaxVarintLen64)
 		n := binary.PutVarint(buf, v.Int())
@@ -358,6 +365,10 @@ func ReadStringReflect(r io.Reader, v reflect.Value) (err error) {
 	}
 	if l < 0 {
 		return ErrUnexpected
+	}
+	if l == 0 {
+		v.Set(reflect.Zero(v.Type()))
+		return
 	}
 	buf := make([]byte, l)
 	_, err = r.Read(buf)
@@ -535,6 +546,7 @@ func ReadMap(r io.Reader, val interface{}) error {
 // WriteStructReflect writes a struct reflect value v to writer w or returns an
 // error if one occured.
 func WriteStructReflect(w io.Writer, v reflect.Value) (err error) {
+
 	for i := 0; i < v.NumField(); i++ {
 		fname := v.Type().Field(i).Name
 		if fname == "_" {
@@ -588,4 +600,27 @@ func ReadStructReflect(r io.Reader, v reflect.Value) (err error) {
 func ReadStruct(r io.Reader, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return ReadStructReflect(r, v)
+}
+
+//
+func WriteChanReflect(w io.Writer, v reflect.Value) (err error) {
+	return nil
+}
+
+//
+func WriteChan(w io.Writer, val interface{}) error {
+	return nil
+}
+
+//
+func ReadChanReflect(r io.Reader, v reflect.Value) (err error) {
+	typ := v.Type()
+	ctyp := reflect.ChanOf(typ.ChanDir(), typ)
+	_ = reflect.MakeChan(ctyp, 0)
+	return nil
+}
+
+//
+func ReadChan(r io.Reader, val interface{}) error {
+	return nil
 }

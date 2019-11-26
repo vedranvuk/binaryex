@@ -92,6 +92,12 @@ type DeepPointerTypes struct {
 	PPointerField ***bool
 }
 
+type NilTypes struct {
+	PBoolField   *bool
+	PStringField *string
+	PMapField    *map[string]string
+}
+
 func (dpt *DeepPointerTypes) init() {
 	pv0 := true
 	pv1 := &pv0
@@ -290,9 +296,27 @@ func TestStructDeepPointer(t *testing.T) {
 	if err := ReadStruct(buf, &in); err != nil {
 		t.Fatal("ReadStruct deep pointer failed", err)
 	}
-
 	if !reflect.DeepEqual(DeepPointerTypes(in), DeepPointerTypes(out)) {
-		t.Fatalf("Read/Write struct deep pointer missmatch: in\n%v, out:\n%v\n", in, out)
+		t.Fatalf("Read/Write struct deep pointer missmatch:\nout:\n%#v\nin:\n%#v\n", out, in)
+	}
+}
+
+func TestStructNilPointer(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	out := NilTypes{}
+	if err := WriteStruct(buf, out); err != nil {
+		t.Fatal("WriteStruct nil pointer failed", err)
+	}
+	in := NilTypes{}
+	if err := ReadStruct(buf, &in); err != nil {
+		t.Fatal("ReadStruct nil pointer failed", err)
+	}
+
+	if *in.PBoolField != false {
+		t.Fatal("r/w mismatch")
+	}
+	if *in.PStringField != "" {
+		t.Fatal("r/w mismatch")
 	}
 }
 
