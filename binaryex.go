@@ -5,7 +5,8 @@
 // Package binaryex implements functions supplement to binary/encoding package.
 // It is designed for ease of use before speed.
 //
-// It supports binary marshaling of all go types, excluding funcs.
+// It supports binary marshaling of all go types, excluding chans, funcs and
+// unsafePointers.
 //
 // Ints and Uints of any size are encoded as VarInts, floats and complex
 // numbers using binary encoding in LittleEndian order, and strings, arrays,
@@ -602,25 +603,27 @@ func ReadStruct(r io.Reader, val interface{}) error {
 	return ReadStructReflect(r, v)
 }
 
-//
+// TODO
 func WriteChanReflect(w io.Writer, v reflect.Value) (err error) {
 	return nil
 }
 
-//
+// TODO
 func WriteChan(w io.Writer, val interface{}) error {
 	return nil
 }
 
-//
+// TODO
 func ReadChanReflect(r io.Reader, v reflect.Value) (err error) {
-	typ := v.Type()
-	ctyp := reflect.ChanOf(typ.ChanDir(), typ)
-	_ = reflect.MakeChan(ctyp, 0)
+	/*
+		typ := v.Type()
+		ctyp := reflect.ChanOf(typ.ChanDir(), typ)
+		_ = reflect.MakeChan(ctyp, 0)
+	*/
 	return nil
 }
 
-//
+// TODO
 func ReadChan(r io.Reader, val interface{}) error {
 	return nil
 }
