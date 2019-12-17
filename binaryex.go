@@ -602,28 +602,3 @@ func ReadStruct(r io.Reader, val interface{}) error {
 	v := reflect.Indirect(reflect.ValueOf(val))
 	return ReadStructReflect(r, v)
 }
-
-// TODO
-func WriteChanReflect(w io.Writer, v reflect.Value) (err error) {
-	return nil
-}
-
-// TODO
-func WriteChan(w io.Writer, val interface{}) error {
-	return nil
-}
-
-// TODO
-func ReadChanReflect(r io.Reader, v reflect.Value) (err error) {
-	/*
-		typ := v.Type()
-		ctyp := reflect.ChanOf(typ.ChanDir(), typ)
-		_ = reflect.MakeChan(ctyp, 0)
-	*/
-	return nil
-}
-
-// TODO
-func ReadChan(r io.Reader, val interface{}) error {
-	return nil
-}
