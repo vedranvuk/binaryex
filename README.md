@@ -6,7 +6,7 @@ It is designed for ease of use before speed.
 
 ## Status
 
-binaryex behaviour is set. Optimization and additional functionality eventually follow.
+binaryex API is set. Optimization, bugfixes and additional functionality eventually follow.
 
 ## License
 

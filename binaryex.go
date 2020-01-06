@@ -37,30 +37,21 @@ package binaryex
 import (
 	"encoding"
 	"encoding/binary"
+	"github.com/vedranvuk/errorex"
 	"io"
 	"reflect"
 	"strings"
 )
 
-// BinaryExError is the base error type of binaryex package.
-type BinaryExError struct {
-	msg string
-}
-
-// Error satisfies the Error interface.
-func (bxe BinaryExError) Error() string {
-	return "binaryex: " + bxe.msg
-}
-
 var (
+	// ErrBInaryEx is the base binaryex package error.
+	ErrBinaryEx = errorex.New("binaryex")
 	// ErrUnsupportedValue is returned when an unsupported value is encountered.
-	ErrUnsupportedValue = BinaryExError{"unsupported value"}
-
+	ErrUnsupportedValue = ErrBinaryEx.Wrap("unsupported value")
 	// ErrUnadressableValue is returned when a non-pointer value is passed to a Read* function.
-	ErrUnadressableValue = BinaryExError{"unadressable value"}
-
+	ErrUnadressableValue = ErrBinaryEx.Wrap("unadressable value")
 	// ErrUnexpected is returned when an unexpected value is read.
-	ErrUnexpected = BinaryExError{"unexpected value"}
+	ErrUnexpected = ErrBinaryEx.Wrap("unexpected value")
 )
 
 // readByteWrapper wraps an io.Reader and implements a ReadByte method.
