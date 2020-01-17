@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	// ErrBInaryEx is the base binaryex package error.
+	// ErrBinaryEx is the base binaryex package error.
 	ErrBinaryEx = errorex.New("binaryex")
 	// ErrUnsupportedValue is returned when an unsupported value is encountered.
 	ErrUnsupportedValue = ErrBinaryEx.Wrap("unsupported value")
