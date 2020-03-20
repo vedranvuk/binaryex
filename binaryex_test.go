@@ -320,32 +320,174 @@ func TestStructNilPointer(t *testing.T) {
 	}
 }
 
-func BenchmarkReadWriteBase(b *testing.B) {
+func BenchmarkReadBool(b *testing.B) {
+	b.StopTimer()
 	buf := bytes.NewBuffer(nil)
-	val := BaseTypes{}
 	for i := 0; i < b.N; i++ {
-		val.init()
-		if err := Write(buf, val); err != nil {
-			b.Fatal(err)
-		}
-		if err := Read(buf, &val); err != nil {
-			b.Fatal(err)
-		}
-		buf.Truncate(0)
+		WriteBool(buf, true)
+	}
+	out := false
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadBool(buf, &out)
 	}
 }
 
-func BenchmarkReadWriteAll(b *testing.B) {
+func BenchmarkWriteBool(b *testing.B) {
+	b.StopTimer()
 	buf := bytes.NewBuffer(nil)
-	val := AllTypes{}
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		val.init()
-		if err := Write(buf, val); err != nil {
-			b.Fatal(err)
-		}
-		if err := Read(buf, &val); err != nil {
-			b.Fatal(err)
-		}
-		buf.Truncate(0)
+		WriteBool(buf, true)
+	}
+}
+
+func BenchmarkReadNumber(b *testing.B) {
+	b.StopTimer()
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteNumber(buf, i)
+	}
+	out := 0
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadNumber(buf, &out)
+	}
+}
+
+func BenchmarkWriteNumber(b *testing.B) {
+	b.StopTimer()
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteNumber(buf, i)
+	}
+}
+
+func BenchmarkReadString(b *testing.B) {
+	b.StopTimer()
+	in := "0123456789"
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteString(buf, in)
+	}
+	out := ""
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadString(buf, &out)
+	}
+}
+
+func BenchmarkWriteString(b *testing.B) {
+	b.StopTimer()
+	in := "0123456789"
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteString(buf, in)
+	}
+}
+
+func BenchmarkReadArray(b *testing.B) {
+	b.StopTimer()
+	in := [10]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteArray(buf, in)
+	}
+	var out [10]byte
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadArray(buf, &out)
+	}
+}
+
+func BenchmarkWriteArray(b *testing.B) {
+	b.StopTimer()
+	in := [10]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteArray(buf, in)
+	}
+}
+
+func BenchmarkReadSlice(b *testing.B) {
+	b.StopTimer()
+	in := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteSlice(buf, in)
+	}
+	var out []byte
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadSlice(buf, &out)
+	}
+}
+
+func BenchmarkWriteSlice(b *testing.B) {
+	b.StopTimer()
+	in := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteSlice(buf, in)
+	}
+}
+
+func BenchmarkReadMap(b *testing.B) {
+	b.StopTimer()
+	in := map[string]int{"0123456789": 1}
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteMap(buf, in)
+	}
+	var out map[string]int
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadMap(buf, &out)
+	}
+}
+
+func BenchmarkWriteMap(b *testing.B) {
+	b.StopTimer()
+	in := map[string]int{"0123456789": 1}
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteMap(buf, in)
+	}
+}
+
+func BenchmarkReadStruct(b *testing.B) {
+	b.StopTimer()
+	type test struct {
+		String string
+		Num    int
+	}
+	in := test{"0123456789", 1}
+	buf := bytes.NewBuffer(nil)
+	for i := 0; i < b.N; i++ {
+		WriteStruct(buf, in)
+	}
+	var out test
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ReadStruct(buf, &out)
+	}
+}
+
+func BenchmarkWriteStruct(b *testing.B) {
+	b.StopTimer()
+	type test struct {
+		String string
+		Num    int
+	}
+	in := test{"0123456789", 1}
+	buf := bytes.NewBuffer(nil)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WriteStruct(buf, in)
 	}
 }
