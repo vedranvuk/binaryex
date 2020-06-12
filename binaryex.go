@@ -37,10 +37,11 @@ package binaryex
 import (
 	"encoding"
 	"encoding/binary"
-	"github.com/vedranvuk/errorex"
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/vedranvuk/errorex"
 )
 
 var (
@@ -538,7 +539,6 @@ func ReadMap(r io.Reader, val interface{}) error {
 // WriteStructReflect writes a struct reflect value v to writer w or returns an
 // error if one occured.
 func WriteStructReflect(w io.Writer, v reflect.Value) (err error) {
-
 	for i := 0; i < v.NumField(); i++ {
 		fname := v.Type().Field(i).Name
 		if fname == "_" {

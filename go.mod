@@ -1,5 +1,5 @@
-module github.com/vedranvuk/binaryex
+module binaryex
 
-go 1.13
+go 1.14
 
-require github.com/vedranvuk/errorex v0.1.0
+require github.com/vedranvuk/errorex v0.3.1
